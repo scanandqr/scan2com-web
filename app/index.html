@@ -3729,10 +3729,16 @@ function bindTour() {
 }
 async function ensureStarter() {
   if (S.codes.length || ls.get('sa_starter_' + S.user.id, 0)) return;
-  // primer código: todos los medios activados (Info, Mail, Alert, Chat con llamadas por la app), sin redirección
-  const { data, error } = await sb.from('codes').insert({ owner_id: S.user.id, type: 'chat', name: 'Mi primer código', public_name: 'Contacta conmigo',
-    public_desc: 'Hola, puedes escribirme, llamarme o avisarme por aquí sin necesidad de mi teléfono.', ch_info: true, ch_mail: true, ch_alert: true, ch_chat: true, ch_call: true, call_app: true, ch_redirect: false }).select().single();
-  if (!error && data) { S.codes.push(data); ls.set('sa_starter_' + S.user.id, 1); }
+  // usuario nuevo: un código ya preparado por cada medio, con nombre y descripción que explican para qué sirve (se pueden cambiar o borrar)
+  const base = { owner_id: S.user.id, type: 'link', ch_info: false, ch_mail: false, ch_alert: false, ch_chat: false, ch_call: false, ch_redirect: false };
+  const rows = [
+    { ...base, type: 'chat', name: 'Para chatear', public_name: 'Chatea conmigo', public_desc: 'Escanea este código para chatear conmigo o llamarme por la app, sin necesidad de mi número de teléfono.', ch_chat: true, ch_call: true, call_app: true },
+    { ...base, name: 'Para información', public_name: 'Información', public_desc: 'Este código sirve para mostrar información pública: escribe aquí lo que quieras que vea quien lo escanee (horario, instrucciones, datos de contacto…).', ch_info: true },
+    { ...base, name: 'Para recibir mensajes', public_name: 'Déjame un mensaje', public_desc: 'Escanea este código para dejarme un mensaje. Me llega al momento, sin que veas mi email ni mi teléfono.', ch_mail: true },
+    { ...base, name: 'Mi página web', public_name: 'Mi página web', public_desc: 'Este código está configurado para llevar a una página web. Cambia la dirección escrita (scan2com.com) por la de tu sitio web.', ch_redirect: true, redirect_url: 'https://scan2com.com' }];
+  let ok = false;
+  for (const r of rows) { const { data, error } = await sb.from('codes').insert(r).select().single(); if (!error && data) { S.codes.push(data); ok = true; } }
+  if (ok) ls.set('sa_starter_' + S.user.id, 1);
 }
 /* cada usuario tiene su propio código de coche, ya preparado: Alert + Bluetooth + desactivar conduciendo */
 async function ensureCar() {
@@ -3740,8 +3746,8 @@ async function ensureCar() {
   if (mine.some(c => isCar(c) || c.style?.car_code) || ls.get('sa_car_' + S.user.id, 0)) return;
   const old = mine.find(c => /coche/i.test(c.name || ''));
   const r = old ? await sb.from('codes').update({ style: { ...(old.style || {}), car: true, car_code: true, design: 'car' } }).eq('id', old.id).select().single()
-    : await sb.from('codes').insert({ owner_id: S.user.id, type: 'alert', name: 'Coche', public_name: 'Mi coche',
-      public_desc: 'Si mi coche molesta o le pasa algo, avísame pulsando Alert. ¡Gracias!', ch_info: true, ch_mail: false, ch_alert: true, ch_chat: false, ch_call: false,
+    : await sb.from('codes').insert({ owner_id: S.user.id, type: 'alert', name: 'Mi coche', public_name: 'Es mi coche',
+      public_desc: 'Si hay algún problema con mi coche (molesta, tiene las luces encendidas, un golpe…), avísame a través de este código pulsando Alert. ¡Gracias!', ch_info: true, ch_mail: false, ch_alert: true, ch_chat: false, ch_call: false,
       bt_auto: true, bt_drive_off: true, is_on: false, style: { car: true, car_code: true, design: 'car' } }).select().single();
   if (!r.error && r.data) { if (old) Object.assign(old, r.data); else S.codes.push(r.data); ls.set('sa_car_' + S.user.id, 1); render(); }
 }
